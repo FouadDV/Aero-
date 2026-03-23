@@ -1,7 +1,10 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from helpers import aero_embed, success_embed, error_embed, info_embed, format_aero, AERO_EMOJI
+from helpers import (
+    aero_embed, success_embed, error_embed, info_embed,
+    format_aero, AERO_EMOJI, DIV, rank_badge, wealth_tier
+)
 import database as db
 
 
@@ -9,93 +12,123 @@ class General(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="help", description="عرض جميع أوامر AeroBot")
+    @app_commands.command(name="help", description="دليل أوامر AeroBot الكامل")
     async def help_command(self, interaction: discord.Interaction):
-        embed = aero_embed("📖 دليل AeroBot", "البوت العربي الاحترافي لإدارة عملة Aero الافتراضية")
+        embed = aero_embed(
+            "📖  دليل AeroBot",
+            f"مرحباً بك في **AeroBot** — منصة عملة Aero الافتراضية داخل Discord.\n{DIV}"
+        )
+        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+
         embed.add_field(
-            name="💰 أوامر الرصيد",
+            name="💼  الرصيد والملف الشخصي",
             value=(
-                "`/balance` — عرض رصيدك\n"
-                "`/profile` — ملفك الشخصي\n"
-                "`/transactions` — سجل معاملاتك"
+                "`/balance` — عرض محفظتك أو محفظة أي عضو\n"
+                "`/profile` — ملفك الشخصي مع المستوى والـ XP\n"
+                "`/transactions` — سجل معاملاتك مع تصفح\n"
+                "`/leaderboard` — قائمة أثرى الأعضاء"
             ),
             inline=False
         )
         embed.add_field(
-            name="🎁 طرق كسب Aero",
+            name="🎁  طرق كسب Aero",
             value=(
-                "`/daily` — مكافأة يومية\n"
-                "`/weekly` — مكافأة أسبوعية\n"
-                "`/referral` — استخدام كود إحالة"
+                "`/daily` — مكافأة يومية 🌅\n"
+                "`/weekly` — مكافأة أسبوعية 📆\n"
+                "`/referral <كود>` — استخدام كود إحالة صديق 🔗"
             ),
             inline=False
         )
         embed.add_field(
-            name="💸 العمليات المالية",
+            name="💸  العمليات المالية",
             value=(
-                "`/pay @user amount` — إرسال Aero\n"
-                "`/gift @user amount` — إرسال هدية بدون ضريبة\n"
-                "`/trade @user give receive` — مقايضة"
+                "`/pay @عضو كمية` — تحويل Aero مع ضريبة\n"
+                "`/gift @عضو كمية` — هدية بدون ضريبة 🎁\n"
+                "`/trade @عضو give receive` — مقايضة مباشرة 🔄"
             ),
             inline=False
         )
         embed.add_field(
-            name="📋 قوانين AeroBot",
+            name="ℹ️  معلومات عامة",
             value=(
-                "• Aero عملة افتراضية داخل Discord فقط\n"
-                "• لا يمكن تحويلها مقابل أموال حقيقية\n"
-                "• جميع العمليات مسجلة\n"
-                "• أي تعامل بين الأعضاء على مسؤوليتهم الشخصية"
+                "`/info` — معلومات عن عملة Aero\n"
+                "`/ping` — سرعة استجابة البوت"
             ),
             inline=False
         )
-        embed.set_footer(text="AeroBot • 1 Aero = 0.018 (مقياس داخلي فقط)")
+        embed.add_field(
+            name=f"{DIV}\n📜  القوانين الأساسية",
+            value=(
+                "• Aero عملة **افتراضية** داخل Discord حصراً\n"
+                "• لا يُسمح بتحويلها لأموال حقيقية أو استخدامها خارج البوت\n"
+                "• جميع العمليات مسجلة ومراقبة\n"
+                "• البوت غير مسؤول عن أي نزاع بين الأعضاء\n"
+                "• كل عملية مالية تستلزم تأكيداً صريحاً منك"
+            ),
+            inline=False
+        )
+        embed.set_footer(text=f"✦ AeroBot  •  1 Aero = 0.018 (مقياس داخلي) ✦")
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="leaderboard", description="عرض أعلى الأرصدة في السيرفر")
+    @app_commands.command(name="leaderboard", description="قائمة أثرى الأعضاء في السيرفر")
     async def leaderboard(self, interaction: discord.Interaction):
         if await db.is_blacklisted(interaction.user.id):
-            await interaction.response.send_message(embed=error_embed("محظور", "أنت في اللائحة السوداء."), ephemeral=True)
+            await interaction.response.send_message(embed=error_embed("الوصول محظور", "أنت في اللائحة السوداء."), ephemeral=True)
             return
 
         leaders = await db.get_leaderboard(10)
         if not leaders:
-            await interaction.response.send_message(embed=info_embed("المتصدرون", "لا يوجد مستخدمون بعد."))
+            await interaction.response.send_message(
+                embed=info_embed("قائمة المتصدرين", f"{DIV}\nلا يوجد أعضاء بعد.\nكن أول المتصدرين عبر `/daily`! 🚀")
+            )
             return
 
-        embed = aero_embed("🏆 قائمة المتصدرين")
         medals = ["🥇", "🥈", "🥉"]
-        lines = []
+        lines  = []
         for i, u in enumerate(leaders):
-            medal = medals[i] if i < 3 else f"**#{i+1}**"
-            bal = float(u["balance"])
-            lines.append(f"{medal} <@{u['id']}> — {format_aero(bal)} | مستوى {u['level']}")
+            bal   = float(u["balance"])
+            medal = medals[i] if i < 3 else f"`#{i+1}`"
+            badge = rank_badge(u["level"])
+            lines.append(
+                f"{medal}  <@{u['id']}>\n"
+                f"    └ {format_aero(bal)}  •  مستوى {u['level']} {badge}"
+            )
 
-        embed.description = "\n".join(lines)
+        embed = aero_embed(
+            "🏆  قائمة المتصدرين",
+            f"{DIV}\n" + "\n".join(lines) + f"\n{DIV}"
+        )
+        embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None)
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="info", description="معلومات عن عملة Aero والقيمة المرجعية")
+    @app_commands.command(name="info", description="معلومات عن عملة Aero")
     async def info(self, interaction: discord.Interaction):
-        aero_value = await db.get_setting("aero_value") or "0.018"
-        daily = await db.get_setting("daily_reward") or "5"
-        weekly = await db.get_setting("weekly_reward") or "10"
+        val      = await db.get_setting("aero_value")   or "0.018"
+        daily    = await db.get_setting("daily_reward")  or "5"
+        weekly   = await db.get_setting("weekly_reward") or "10"
         referral = await db.get_setting("referral_reward") or "5"
-        tax = await db.get_setting("tax_rate") or "0"
+        tax      = await db.get_setting("tax_rate")      or "0"
 
-        embed = aero_embed("ℹ️ معلومات عملة Aero")
-        embed.add_field(name="💹 القيمة المرجعية", value=f"1 Aero = **{aero_value}** (مقياس داخلي)", inline=False)
-        embed.add_field(name="📅 المكافأة اليومية", value=f"**{daily} Aero**", inline=True)
-        embed.add_field(name="📆 المكافأة الأسبوعية", value=f"**{weekly} Aero**", inline=True)
-        embed.add_field(name="🔗 مكافأة الإحالة", value=f"**{referral} Aero**", inline=True)
-        embed.add_field(name="💸 الضريبة على التحويل", value=f"**{tax}%**", inline=True)
+        embed = aero_embed(
+            "💹  معلومات عملة Aero",
+            f"{DIV}\n"
+            f"**القيمة المرجعية**\n"
+            f"## 1 {AERO_EMOJI} = {val}\n"
+            f"> *(للمقياس الداخلي فقط — لا تعكس قيمة حقيقية)*\n"
+            f"{DIV}"
+        )
+        embed.add_field(name="🌅 مكافأة يومية",    value=f"**{daily} Aero**", inline=True)
+        embed.add_field(name="📆 مكافأة أسبوعية",  value=f"**{weekly} Aero**", inline=True)
+        embed.add_field(name="🔗 مكافأة الإحالة",  value=f"**{referral} Aero**", inline=True)
+        embed.add_field(name="💸 ضريبة التحويل",   value=f"**{tax}%**", inline=True)
         embed.add_field(
-            name="📜 القوانين الرسمية",
+            name=f"{DIV}\n📜  القوانين الرسمية",
             value=(
-                "• Aero عملة افتراضية داخل Discord فقط\n"
-                "• لا يُسمح باستخدامها خارج البوت أو تحويلها لأموال حقيقية\n"
+                "• Aero عملة **افتراضية** داخل Discord حصراً\n"
+                "• لا يُسمح بتحويلها لأموال حقيقية أو خارج البوت\n"
                 "• البوت غير مسؤول عن أي خسارة أو نزاع\n"
-                "• جميع العمليات مسجلة ومراقبة\n"
-                "• يجب الموافقة قبل كل عملية مالية"
+                "• جميع العمليات مسجلة وشفافة\n"
+                "• التأكيد إلزامي قبل كل عملية مالية"
             ),
             inline=False
         )
@@ -104,7 +137,19 @@ class General(commands.Cog):
     @app_commands.command(name="ping", description="فحص سرعة استجابة البوت")
     async def ping(self, interaction: discord.Interaction):
         latency = round(self.bot.latency * 1000)
-        embed = aero_embed("🏓 Pong!", f"سرعة الاستجابة: **{latency}ms**")
+        if latency < 80:
+            status = "ممتازة 🟢"
+        elif latency < 150:
+            status = "جيدة 🟡"
+        else:
+            status = "بطيئة 🔴"
+        embed = aero_embed(
+            "🏓  Pong!",
+            f"{DIV}\n"
+            f"⚡ **زمن الاستجابة:** `{latency} ms`\n"
+            f"📶 **الحالة:** {status}\n"
+            f"{DIV}"
+        )
         await interaction.response.send_message(embed=embed)
 
 
