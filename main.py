@@ -1,6 +1,12 @@
-def main():
-    print("Hello from repl-nix-workspace!")
+from flask import Flask
+import os
 
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Hello from Aero Bot!"
 
 if __name__ == "__main__":
-    main()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
