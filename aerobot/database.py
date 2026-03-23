@@ -269,6 +269,108 @@ async def get_stats():
         await conn.close()
 
 
+async def get_advanced_stats():
+    conn = await get_connection()
+    try:
+        total_aero = await conn.fetchval("SELECT COALESCE(SUM(balance), 0) FROM users")
+        max_bal = await conn.fetchval("SELECT COALESCE(MAX(balance), 0) FROM users")
+        min_bal = await conn.fetchval("SELECT COALESCE(MIN(balance), 0) FROM users WHERE balance > 0")
+        avg_bal = await conn.fetchval("SELECT COALESCE(AVG(balance), 0) FROM users WHERE balance > 0")
+        median_bal = await conn.fetchval("""
+            SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY balance)
+            FROM users WHERE balance > 0
+        """)
+        user_count = await conn.fetchval("SELECT COUNT(*) FROM users")
+        active_users = await conn.fetchval("""
+            SELECT COUNT(*) FROM users
+            WHERE last_daily > NOW() - INTERVAL '7 days'
+               OR last_weekly > NOW() - INTERVAL '7 days'
+        """)
+        new_today = await conn.fetchval("SELECT COUNT(*) FROM users WHERE join_date > NOW() - INTERVAL '1 day'")
+        new_week = await conn.fetchval("SELECT COUNT(*) FROM users WHERE join_date > NOW() - INTERVAL '7 days'")
+        zero_balance = await conn.fetchval("SELECT COUNT(*) FROM users WHERE balance = 0")
+        rich_users = await conn.fetchval("SELECT COUNT(*) FROM users WHERE balance >= 100")
+        blacklist_count = await conn.fetchval("SELECT COUNT(*) FROM blacklist")
+        avg_level = await conn.fetchval("SELECT COALESCE(AVG(level), 1) FROM users")
+        max_level = await conn.fetchval("SELECT COALESCE(MAX(level), 1) FROM users")
+        avg_xp = await conn.fetchval("SELECT COALESCE(AVG(xp), 0) FROM users")
+        tx_count = await conn.fetchval("SELECT COUNT(*) FROM transactions")
+        tx_today = await conn.fetchval("SELECT COUNT(*) FROM transactions WHERE created_at > NOW() - INTERVAL '1 day'")
+        tx_week = await conn.fetchval("SELECT COUNT(*) FROM transactions WHERE created_at > NOW() - INTERVAL '7 days'")
+        tx_by_type = await conn.fetch("""
+            SELECT type, COUNT(*) as count, COALESCE(SUM(amount), 0) as total
+            FROM transactions GROUP BY type ORDER BY count DESC
+        """)
+        aero_rewards = await conn.fetchval("""
+            SELECT COALESCE(SUM(amount), 0) FROM transactions
+            WHERE type IN ('daily', 'weekly', 'referral')
+        """)
+        aero_transferred = await conn.fetchval("""
+            SELECT COALESCE(SUM(amount), 0) FROM transactions
+            WHERE type IN ('pay', 'gift')
+        """)
+        aero_admin = await conn.fetchval("""
+            SELECT COALESCE(SUM(amount), 0) FROM transactions
+            WHERE type = 'admin_add'
+        """)
+        top3 = await conn.fetch("""
+            SELECT id, balance, level FROM users ORDER BY balance DESC LIMIT 3
+        """)
+        most_active = await conn.fetch("""
+            SELECT sender_id as uid, COUNT(*) as cnt FROM transactions
+            WHERE sender_id IS NOT NULL
+            GROUP BY sender_id ORDER BY cnt DESC LIMIT 3
+        """)
+        dist_0_10 = await conn.fetchval("SELECT COUNT(*) FROM users WHERE balance > 0 AND balance < 10")
+        dist_10_50 = await conn.fetchval("SELECT COUNT(*) FROM users WHERE balance >= 10 AND balance < 50")
+        dist_50_100 = await conn.fetchval("SELECT COUNT(*) FROM users WHERE balance >= 50 AND balance < 100")
+        dist_100_plus = await conn.fetchval("SELECT COUNT(*) FROM users WHERE balance >= 100")
+        referred_count = await conn.fetchval("SELECT COUNT(*) FROM users WHERE referred_by IS NOT NULL")
+
+        return {
+            "total_aero": float(total_aero or 0),
+            "max_balance": float(max_bal or 0),
+            "min_balance": float(min_bal or 0),
+            "avg_balance": float(avg_bal or 0),
+            "median_balance": float(median_bal or 0),
+            "user_count": int(user_count or 0),
+            "active_users": int(active_users or 0),
+            "new_today": int(new_today or 0),
+            "new_week": int(new_week or 0),
+            "zero_balance": int(zero_balance or 0),
+            "rich_users": int(rich_users or 0),
+            "blacklist_count": int(blacklist_count or 0),
+            "avg_level": float(avg_level or 1),
+            "max_level": int(max_level or 1),
+            "avg_xp": float(avg_xp or 0),
+            "tx_count": int(tx_count or 0),
+            "tx_today": int(tx_today or 0),
+            "tx_week": int(tx_week or 0),
+            "tx_by_type": [dict(r) for r in tx_by_type],
+            "aero_rewards": float(aero_rewards or 0),
+            "aero_transferred": float(aero_transferred or 0),
+            "aero_admin": float(aero_admin or 0),
+            "top3": [dict(r) for r in top3],
+            "most_active": [dict(r) for r in most_active],
+            "dist_0_10": int(dist_0_10 or 0),
+            "dist_10_50": int(dist_10_50 or 0),
+            "dist_50_100": int(dist_50_100 or 0),
+            "dist_100_plus": int(dist_100_plus or 0),
+            "referred_count": int(referred_count or 0),
+        }
+    finally:
+        await conn.close()
+
+
+async def reset_all_stats():
+    conn = await get_connection()
+    try:
+        await conn.execute("UPDATE users SET balance = 0, xp = 0, level = 1, last_daily = NULL, last_weekly = NULL, referred_by = NULL")
+        await conn.execute("DELETE FROM transactions")
+    finally:
+        await conn.close()
+
+
 async def update_last_daily(user_id: int):
     conn = await get_connection()
     try:

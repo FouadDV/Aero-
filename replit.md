@@ -1,4 +1,19 @@
-# Workspace
+# Workspace — AeroBot + API Server
+
+## AeroBot (Discord Bot)
+
+Python Discord bot located in `aerobot/`. Uses asyncpg for PostgreSQL, discord.py 2.x with slash commands.
+
+- `aerobot/bot.py` — نقطة الدخول الرئيسية
+- `aerobot/database.py` — جميع عمليات قاعدة البيانات
+- `aerobot/helpers.py` — Embeds, ConfirmView, PaginationView, StatsView helpers
+- `aerobot/cogs/economy.py` — أوامر المستخدم (balance, daily, weekly, pay, gift, trade, referral, transactions)
+- `aerobot/cogs/admin.py` — لوحة الإدارة مع تحليلات متقدمة وأزرار Refresh/Reset
+- `aerobot/cogs/general.py` — أوامر عامة (help, leaderboard, info, ping)
+
+Secrets required: DISCORD_TOKEN, OWNER_ID
+
+
 
 ## Overview
 
